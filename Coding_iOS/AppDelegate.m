@@ -10,7 +10,10 @@
 #define UMSYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(v) ([[[UIDevice currentDevice] systemVersion] compare:v options:NSNumericSearch] != NSOrderedAscending) 
 #define _IPHONE80_ 80000
 
-
+#if DEBUG
+#import <FLEX/FLEXManager.h>
+#import "RRFPSBar.h"
+#endif
 
 #import "AppDelegate.h"
 #import "RootTabViewController.h"
@@ -24,6 +27,8 @@
 #import "BaseNavigationController.h"
 #import "PasswordViewController.h"
 #import "IntroductionViewController.h"
+#import "TweetSendViewController.h"
+
 #import "FunctionIntroManager.h"
 #import <UMengSocial/UMSocial.h>
 #import <UMengSocial/UMSocialWechatHandler.h>
@@ -103,6 +108,11 @@
         @strongify(self);
         [self completionStartAnimationWithOptions:launchOptions];
     }];
+    
+#if DEBUG
+//    [[RRFPSBar sharedInstance] setShowsAverage:YES];
+//    [[RRFPSBar sharedInstance] setHidden:NO];
+#endif
     
     return YES;
 }
@@ -256,7 +266,16 @@
 - (BOOL)application:(UIApplication *)application openURL:(NSURL *)url sourceApplication:(NSString *)sourceApplication annotation:(id)annotation{
     DebugLog(@"path: %@, params: %@", [url path], [url queryParams]);
     if ([url.absoluteString hasPrefix:kCodingAppScheme]) {
-        if (![self showPasswordWithURL:url]) {//如果不是登录注册的链接，就是用正常的解析模式解析
+        NSDictionary *queryParams = [url queryParams];
+        if (queryParams[@"email"] && queryParams[@"key"]) {//重置密码
+            [self showPasswordWithURL:url];
+        }else if ([queryParams[@"type"] isEqualToString:@"tweet"]){//发冒泡
+            if ([Login isLogin]) {
+                [TweetSendViewController presentWithParams:queryParams];
+            }else{
+                [NSObject showHudTipStr:@"未登录"];
+            }
+        }else{//一般模式解析网页
             [BaseViewController presentLinkStr:url.absoluteString];
         }
         return YES;

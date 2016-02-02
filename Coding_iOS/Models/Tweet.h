@@ -17,19 +17,20 @@
 
 @interface Tweet : NSObject
 @property (readwrite, nonatomic, strong) NSString *content, *device, *location, *coord, *address;
-@property (readwrite, nonatomic, strong) NSNumber *liked, *activity_id, *id, *comments, *likes;
+@property (readwrite, nonatomic, strong) NSNumber *liked, *rewarded, *activity_id, *id, *comments, *likes, *rewards;
 @property (readwrite, nonatomic, strong) NSDate *created_at;
 @property (readwrite, nonatomic, strong) User *owner;
-@property (readwrite, nonatomic, strong) NSMutableArray *comment_list, *like_users;
+@property (readwrite, nonatomic, strong) NSMutableArray *comment_list, *like_users, *reward_users;
 @property (readwrite, nonatomic, strong) NSDictionary *propertyArrayMap;
 @property (assign, nonatomic) BOOL canLoadMore, willLoadMore, isLoading;
 @property (readwrite, nonatomic, strong) HtmlMedia *htmlMedia;
 @property (nonatomic,strong) TweetSendLocationResponse *locationData;
 
-@property (readonly, nonatomic, strong) NSMutableArray *tweetImages;
+@property (readwrite, nonatomic, strong) NSMutableArray *tweetImages;//对 selectedAssetURLs 操作即可，最好不要直接赋值。。应用跳转带的图片会直接对 tweetImages赋值
 @property (readwrite, nonatomic, strong) NSMutableArray *selectedAssetURLs;
 @property (readwrite, nonatomic, strong) NSString *tweetContent;
 @property (readwrite, nonatomic, strong) NSString *nextCommentStr;
+@property (strong, nonatomic) NSString *callback;
 @property (assign, nonatomic) CGFloat contentHeight;
 
 @property (strong, nonatomic) NSString *user_global_key;
@@ -43,14 +44,19 @@
 - (NSInteger)numOfComments;
 - (BOOL)hasMoreComments;
 
-- (NSInteger)numOfLikers;
-- (BOOL)hasMoreLikers;
+- (NSArray *)like_reward_users;
+- (BOOL)hasLikesOrRewards;
+- (BOOL)hasMoreLikesOrRewards;
+- (BOOL)rewardedBy:(User *)user;
 
 - (NSString *)toDoLikePath;
 - (void)changeToLiked:(NSNumber *)liked;
 
 - (NSString *)toDoCommentPath;
 - (NSDictionary *)toDoCommentParams;
+
+- (NSString *)toLikesAndRewardsPath;
+- (NSDictionary *)toLikesAndRewardsParams;
 
 - (NSString *)toLikersPath;
 - (NSDictionary *)toLikersParams;
@@ -71,7 +77,7 @@
 +(Tweet *)tweetInProject:(Project *)project andPPID:(NSString *)pp_id;
 
 - (NSDictionary *)toDoTweetParams;
-- (BOOL)isAllImagesHaveDone;
+- (BOOL)isAllImagesDoneSucess;
 - (void)addNewComment:(Comment *)comment;
 - (void)deleteComment:(Comment *)comment;
 

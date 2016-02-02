@@ -22,6 +22,11 @@
 - (NSDictionary *)toParams{
     return @{@"email" : self.email,
              @"global_key" : self.global_key,
-             @"j_captcha" : _j_captcha? _j_captcha: @""};
+             @"j_captcha" : _j_captcha? _j_captcha: @"",
+             @"channel" : [Register channel]};
+}
+
++ (NSString *)channel{
+    return @"coding-ios";
 }
 @end

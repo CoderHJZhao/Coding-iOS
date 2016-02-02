@@ -12,6 +12,7 @@
 #import <NYXImagesKit/NYXImagesKit.h>
 #import <MMMarkdown/MMMarkdown.h>
 #import "MBProgressHUD+Add.h"
+#import "Register.h"
 
 @implementation Coding_NetAPIManager
 + (instancetype)sharedManager {
@@ -37,15 +38,15 @@
 }
 - (void)request_UnReadNotificationsWithBlock:(void (^)(id data, NSError *error))block{
     NSMutableDictionary *notificationDict = [[NSMutableDictionary alloc] init];
-    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/notification/unread-count" withParams:@{@"type" : [NSNumber numberWithInteger:0]} withMethodType:Get andBlock:^(id data, NSError *error) {
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/notification/unread-count" withParams:@{@"type" : @(0)} withMethodType:Get andBlock:^(id data, NSError *error) {
         if (data) {
 //            @我的
             [notificationDict setObject:[data valueForKeyPath:@"data"] forKey:kUnReadKey_notification_AT];
-            [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/notification/unread-count" withParams:@{@"type" : [NSArray arrayWithObjects:[NSNumber numberWithInteger:1], [NSNumber numberWithInteger:2], nil]} withMethodType:Get andBlock:^(id dataComment, NSError *errorComment) {
+            [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/notification/unread-count" withParams:@{@"type" : @[@(1), @(2)]} withMethodType:Get andBlock:^(id dataComment, NSError *errorComment) {
                 if (dataComment) {
 //                    评论
                     [notificationDict setObject:[dataComment valueForKeyPath:@"data"] forKey:kUnReadKey_notification_Comment];
-                    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/notification/unread-count" withParams:@{@"type" : [NSNumber numberWithInteger:4]} withMethodType:Get andBlock:^(id dataSystem, NSError *errorSystem) {
+                    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/notification/unread-count" withParams:@{@"type" : @[@(4),@(6)]} withMethodType:Get andBlock:^(id dataSystem, NSError *errorSystem) {
                         if (dataSystem) {
 //                            系统
                             [MobClick event:kUmeng_Event_Request_Notification label:@"消息页面的红点通知"];
@@ -85,18 +86,23 @@
         }
     }];
 }
-- (void)request_Login_WithParams:(id)params andBlock:(void (^)(id data, NSError *error))block{
-    NSString *path = @"api/login";
+- (void)request_Login_WithPath:(NSString *)path Params:(id)params andBlock:(void (^)(id data, NSError *error))block{
     [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post autoShowError:NO andBlock:^(id data, NSError *error) {
         id resultData = [data valueForKeyPath:@"data"];
         if (resultData) {
-            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"登录_密码"];
-
-            User *curLoginUser = [NSObject objectOfClass:@"User" fromJSON:resultData];
-            if (curLoginUser) {
-                [Login doLogin:resultData];
-            }
-            block(curLoginUser, nil);
+            [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/user/unread-count" withParams:nil withMethodType:Get autoShowError:NO andBlock:^(id data_check, NSError *error_check) {//检查当前账号未设置邮箱和GK
+                if (error_check.userInfo[@"msg"][@"user_need_activate"]) {
+                    block(nil, error_check);
+                }else{
+                    [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"登录_密码"];
+                    
+                    User *curLoginUser = [NSObject objectOfClass:@"User" fromJSON:resultData];
+                    if (curLoginUser) {
+                        [Login doLogin:resultData];
+                    }
+                    block(curLoginUser, nil);
+                }
+            }];
         }else{
             block(nil, error);
         }
@@ -132,10 +138,10 @@
     }];
 }
 
-- (void)request_SendMailToPath:(NSString *)path email:(NSString *)email j_captcha:(NSString *)j_captcha andBlock:(void (^)(id data, NSError *error))block{
-    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:@{@"email": email, @"j_captcha": j_captcha} withMethodType:Get andBlock:^(id data, NSError *error) {
+- (void)request_SetPasswordToPath:(NSString *)path params:(NSDictionary *)params andBlock:(void (^)(id data, NSError *error))block{
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
         if (data) {
-            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"发激活or重置密码邮件"];
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"激活or重置密码"];
 
             block(data, nil);
         }else{
@@ -143,13 +149,125 @@
         }
     }];
 }
-
-- (void)request_SetPasswordToPath:(NSString *)path params:(NSDictionary *)params andBlock:(void (^)(id data, NSError *error))block{
+- (void)request_CheckPhoneCodeWithPhone:(NSString *)phone code:(NSString *)code type:(PurposeType)type block:(void (^)(id data, NSError *error))block{
+    NSString *path = @"api/account/register/check_phone_code";
+    NSMutableDictionary *params = @{@"phone": phone,
+                                    @"code": code}.mutableCopy;
+    switch (type) {
+        case PurposeToRegister:
+            params[@"type"] = @"register";
+            break;
+        case PurposeToPasswordActivate:
+            params[@"type"] = @"activate";
+            break;
+        case PurposeToPasswordReset:
+            params[@"type"] = @"reset";
+            break;
+    }
+    
     [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
         if (data) {
-            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"激活or重置密码"];
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"校验手机验证码"];
+        }
+        block(data, error);
+    }];
+}
 
-            block(data, nil);
+- (void)request_GeneratePhoneCodeWithPhone:(NSString *)phone type:(PurposeType)type block:(void (^)(id data, NSError *error))block{
+    NSString *path;
+    NSDictionary *params = @{@"phone": phone};
+    switch (type) {
+        case PurposeToRegister:
+            path = @"api/account/register/generate_phone_code";
+            break;
+        case PurposeToPasswordActivate:
+            path = @"api/account/activate/generate_phone_code";
+            break;
+        case PurposeToPasswordReset:
+            path = @"api/account/reset_password/generate_phone_code";
+            break;
+    }
+    
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"生成手机验证码"];
+        }
+        block(data, error);
+    }];
+}
+- (void)request_SetPasswordWithPhone:(NSString *)phone code:(NSString *)code password:(NSString *)password captcha:(NSString *)captcha type:(PurposeType)type block:(void (^)(id data, NSError *error))block{
+    NSString *path = @"api/account/register/phone";
+    NSMutableDictionary *params = @{@"phone": phone,
+                                    @"code": code,
+                                    @"password": [password sha1Str]}.mutableCopy;
+    switch (type) {
+        case PurposeToRegister:{
+            path = @"api/account/register/phone";
+            params[@"channel"] = [Register channel];
+            break;
+        }
+        case PurposeToPasswordActivate:
+            path = @"api/account/activate/phone/set_password";
+            break;
+        case PurposeToPasswordReset:
+            path = @"api/phone/resetPassword";
+            break;
+    }
+    if (captcha.length > 0) {
+        params[@"j_captcha"] = captcha;
+    }
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:type == PurposeToRegister? @"手机注册账号": @"设置or重置密码"];
+            if (type == PurposeToRegister) {
+                User *curLoginUser = [NSObject objectOfClass:@"User" fromJSON:data[@"data"]];
+                if (curLoginUser) {
+                    [Login doLogin:data[@"data"]];
+                }
+                block(curLoginUser, nil);
+                return ;
+            }
+        }
+        block(data, error);
+    }];
+}
+- (void)request_SetPasswordWithEmail:(NSString *)email captcha:(NSString *)captcha type:(PurposeType)type block:(void (^)(id data, NSError *error))block{
+    NSString *path;
+    NSDictionary *params = @{@"email": email,
+                             @"j_captcha": captcha};
+    switch (type) {
+        case PurposeToPasswordActivate:
+            path = @"api/activate";
+            break;
+        case PurposeToPasswordReset:
+            path = @"api/resetPassword";
+            break;
+        default:
+            path = nil;
+            break;
+    }
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Get andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_Get label:@"发激活or重置密码邮件"];
+        }
+        block(data, nil);
+    }];
+}
+- (void)request_ActiveByPhone:(NSString *)phone setEmail:(NSString *)email global_key:(NSString *)global_key block:(void (^)(id data, NSError *error))block{
+    NSString *path = @"api/account/activate/phone";
+    NSDictionary *params = @{@"phone" : phone,
+                             @"email": email,
+                             @"global_key": global_key};
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
+        id resultData = [data valueForKeyPath:@"data"];
+        if (resultData) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"激活账号_设置邮箱KEY"];
+            
+            User *curLoginUser = [NSObject objectOfClass:@"User" fromJSON:resultData];
+            if (curLoginUser) {
+                [Login doLogin:resultData];
+            }
+            block(curLoginUser, nil);
         }else{
             block(nil, error);
         }
@@ -171,6 +289,23 @@
         }
     }];
 }
+
+- (void)request_ProjectsCatergoryAndCounts_WithObj:(ProjectCount *)pCount andBlock:(void (^)(ProjectCount *data, NSError *error))block
+{
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/project_count" withParams:nil withMethodType:Get andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_RootList label:@"筛选列表"];
+            
+            id resultData = [data valueForKeyPath:@"data"];
+           ProjectCount *prosC = [NSObject objectOfClass:@"ProjectCount" fromJSON:resultData];
+            block(prosC, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+
+}
+
 - (void)request_ProjectsHaveTasks_WithObj:(Projects *)projects andBlock:(void (^)(id data, NSError *error))block{
     projects.isLoading = YES;
     [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/projects" withParams:[projects toParams] withMethodType:Get andBlock:^(id data, NSError *error) {
@@ -434,17 +569,15 @@
             resultData = [resultData objectForKey:@"list"];
 
             NSMutableArray *resultA = [NSObject arrayFromJSON:resultData ofObjects:@"ProjectMember"];
-            
-            __block NSUInteger mineIndex = 0;
-            [resultA enumerateObjectsUsingBlock:^(ProjectMember *obj, NSUInteger idx, BOOL *stop) {
-                if (obj.user_id.integerValue == [Login curLoginUser].id.integerValue) {
-                    mineIndex = idx;
-                    *stop = YES;
+            [resultA sortUsingComparator:^NSComparisonResult(ProjectMember *obj1, ProjectMember *obj2) {
+                if ([obj1.user_id isEqualToNumber:[Login curLoginUser].id]) {
+                    return NSOrderedAscending;
+                }else if ([obj2.user_id isEqualToNumber:[Login curLoginUser].id]){
+                    return NSOrderedDescending;
+                }else{
+                    return obj1.type.intValue < obj2.type.intValue;
                 }
             }];
-            if (mineIndex > 0) {
-                [resultA exchangeObjectAtIndex:mineIndex withObjectAtIndex:0];
-            }
             block(resultA, nil);
         }else{
             block(nil, error);
@@ -498,7 +631,35 @@
         }
     }];
 }
-
+- (void)request_EditAliasOfMember:(ProjectMember *)curMember inProject:(Project *)curPro andBlock:(void (^)(id data, NSError *error))block{
+    NSString *path = [NSString stringWithFormat:@"api/project/%@/members/update_alias/%@", curPro.id, curMember.user_id];
+    NSDictionary *params = @{@"alias": curMember.editAlias};
+    [NSObject showStatusBarQueryStr:@"正在设置备注"];
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"项目成员_设置备注名"];
+            
+            [NSObject showStatusBarSuccessStr:@"备注设置成功"];
+        }else{
+            [NSObject showStatusBarError:error];
+        }
+        block(data, error);
+    }];
+}
+- (void)request_EditTypeOfMember:(ProjectMember *)curMember inProject:(Project *)curPro andBlock:(void (^)(id data, NSError *error))block{
+    NSString *path = [NSString stringWithFormat:@"api/project/%@/member/%@/%@", curPro.id, curMember.user.global_key, curMember.editType];
+    [NSObject showStatusBarQueryStr:@"正在设置成员类型"];
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:nil withMethodType:Post andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"项目成员_设置成员类型"];
+            
+            [NSObject showStatusBarSuccessStr:@"成员类型设置成功"];
+        }else{
+            [NSObject showStatusBarError:error];
+        }
+        block(data, error);
+    }];
+}
 #pragma mark MRPR
 - (void)request_MRPRS_WithObj:(MRPRS *)curMRPRS andBlock:(void (^)(MRPRS *data, NSError *error))block{
     curMRPRS.isLoading = YES;
@@ -982,6 +1143,19 @@
     }];
 }
 
+- (void)request_EditCodeFile:(CodeFile *)codeFile withPro:(Project *)project andBlock:(void (^)(id data, NSError *error))block{
+    NSString *filePath = [NSString stringWithFormat:@"api/user/%@/project/%@/git/edit/%@", project.owner_user_name, project.name, [NSString handelRef:codeFile.ref path:codeFile.path]];
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:filePath withParams:[codeFile toEditParams] withMethodType:Post andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_Get label:@"代码文件_修改"];
+            
+            block(data, nil);//{"code":0}
+        }else{
+            block(nil, error);
+        }
+    }];
+}
+
 - (void)request_CodeBranchOrTagWithPath:(NSString *)path withPro:(Project *)project andBlock:(void (^)(id data, NSError *error))block{
     [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[project toBranchOrTagPath:path] withParams:nil withMethodType:Get andBlock:^(id data, NSError *error) {
         if (data) {
@@ -1097,28 +1271,38 @@
 }
 
 - (void)request_TaskDetail:(Task *)task andBlock:(void (^)(id data, NSError *error))block{
-    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[task toTaskDetailPath] withParams:nil withMethodType:Get andBlock:^(id data, NSError *error) {
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[task toTaskDetailPath] withParams:nil withMethodType:Get andBlock:^(id data, NSError *error) {//请求任务基本内容
         if (data) {
             id resultData = [data valueForKeyPath:@"data"];
             Task *resultA = [NSObject objectOfClass:@"Task" fromJSON:resultData];
-            if (resultA.has_description.boolValue) {
-                [MobClick event:kUmeng_Event_Request_Get label:@"任务_详情_有描述"];
+            [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[resultA toWatchersPath] withParams:@{@"pageSize": @1000} withMethodType:Get andBlock:^(id dataW, NSError *errorW) {//请求任务关注者
+                if (dataW) {
+                    dataW = dataW[@"data"][@"list"];
+                    NSArray *watchers = [NSObject arrayFromJSON:dataW ofObjects:@"User"];
+                    resultA.watchers = watchers.mutableCopy;
+                    
+                    if (resultA.has_description.boolValue) {
+                        [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[resultA toDescriptionPath] withParams:nil withMethodType:Get andBlock:^(id dataD, NSError *errorD) {//请求任务描述
+                            if (dataD) {
+                                [MobClick event:kUmeng_Event_Request_Get label:@"任务_详情_有描述"];
 
-                [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[resultA toDescriptionPath] withParams:nil withMethodType:Get andBlock:^(id dataD, NSError *errorD) {
-                    if (dataD) {
-                        dataD = [dataD valueForKey:@"data"];
-                        Task_Description *taskD = [NSObject objectOfClass:@"Task_Description" fromJSON:dataD];
-                        resultA.task_description = taskD;
-                        block(resultA, nil);
+                                dataD = [dataD valueForKey:@"data"];
+                                Task_Description *taskD = [NSObject objectOfClass:@"Task_Description" fromJSON:dataD];
+                                resultA.task_description = taskD;
+                                block(resultA, nil);
+                            }else{
+                                block(nil, errorD);
+                            }
+                        }];
                     }else{
-                        block(nil, errorD);
+                        [MobClick event:kUmeng_Event_Request_Get label:@"任务_详情_无描述"];
+                        
+                        block(resultA, nil);
                     }
-                }];
-            }else{
-                [MobClick event:kUmeng_Event_Request_Get label:@"任务_详情_无描述"];
-
-                block(resultA, nil);
-            }
+                }else{
+                    block(nil, errorW);
+                }
+            }];
         }else{
             block(nil, error);
         }
@@ -1155,6 +1339,27 @@
         if (data) {
             [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"任务_评论_删除"];
 
+            block(data, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+}
+
+- (void)request_ChangeWatcher:(User *)watcher ofTask:(Task *)task andBlock:(void (^)(id data, NSError *error))block{
+    NSString *path = [NSString stringWithFormat:@"api/task/%@/user/%@/watch", task.id.stringValue, watcher.global_key];
+    User *hasWatcher = [task hasWatcher:watcher];
+    NetworkMethod method = hasWatcher? Delete: Post;
+
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:nil withMethodType:method andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:method == Post? @"任务_添加关注者": @"任务_删除关注者"];
+            
+            if (!hasWatcher && watcher) {
+                [task.watchers addObject:watcher];
+            }else if (hasWatcher){
+                [task.watchers removeObject:hasWatcher];
+            }
             block(data, nil);
         }else{
             block(nil, error);
@@ -1461,63 +1666,61 @@
     }];
 }
 - (void)request_Tweet_DoTweet_WithObj:(Tweet *)tweet andBlock:(void (^)(id data, NSError *error))block{
-    if (tweet.tweetImages && tweet.tweetImages.count > 0) {
-        /**
-         *  冒泡多张一起发送，不显示进度条
-         */
-        [NSObject showStatusBarQueryStr:@"正在发送冒泡"];
-        for (int i=0; i < tweet.tweetImages.count; i++) {
-            TweetImage *imageItem = [tweet.tweetImages objectAtIndex:i];
-            if (imageItem.uploadState == TweetImageUploadStateInit) {
-                imageItem.uploadState = TweetImageUploadStateIng;
-                [self uploadTweetImage:imageItem.image doneBlock:^(NSString *imagePath, NSError *error) {
-                    if (imagePath) {
-                        imageItem.uploadState = TweetImageUploadStateSuccess;
-                        imageItem.imageStr = [NSString stringWithFormat:@" ![图片](%@) ", imagePath];
-                    }else{
-                        [NSObject showStatusBarError:error];
-                        imageItem.uploadState = TweetImageUploadStateFail;
-                        imageItem.imageStr = [NSString stringWithFormat:@" ![图片]() "];
-                        block(nil, error);
-                        return ;
-                    }
-                    if ([tweet isAllImagesHaveDone]) {
-                        [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/tweet" withParams:[tweet toDoTweetParams] withMethodType:Post andBlock:^(id data, NSError *error) {
-                            if (data) {
-                                [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"冒泡_添加_有图"];
-
-                                id resultData = [data valueForKeyPath:@"data"];
-                                Tweet *tweet = [NSObject objectOfClass:@"Tweet" fromJSON:resultData];
-                                [NSObject showStatusBarSuccessStr:@"冒泡发送成功"];
-                                block(tweet, nil);
-                            }else{
-                                [NSObject showStatusBarError:error];
-                                block(nil, error);
-                            }
-                        }];
-                    }
-                } progerssBlock:^(CGFloat progressValue) {
-                    DebugLog(@"progressValue %d : %.2f", i, progressValue);
-                }];
-            }
-        }
-//        -----------------
-
-    }else{
-        [NSObject showStatusBarQueryStr:@"正在发送冒泡"];
+    //发送冒泡内容 block
+    void (^sendTweetBlock)() = ^{
         [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/tweet" withParams:[tweet toDoTweetParams] withMethodType:Post andBlock:^(id data, NSError *error) {
             if (data) {
-                [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"冒泡_添加_无图"];
-
+                [MobClick event:kUmeng_Event_Request_ActionOfServer label:tweet.tweetImages.count > 0? @"冒泡_添加_有图": @"冒泡_添加_无图"];
+                
                 id resultData = [data valueForKeyPath:@"data"];
-                Tweet *tweet = [NSObject objectOfClass:@"Tweet" fromJSON:resultData];
+                Tweet *result = [NSObject objectOfClass:@"Tweet" fromJSON:resultData];
                 [NSObject showStatusBarSuccessStr:@"冒泡发送成功"];
-                block(tweet, nil);
+                block(result, nil);
             }else{
                 [NSObject showStatusBarError:error];
                 block(nil, error);
             }
         }];
+    };
+    //开始发送
+    [NSObject showStatusBarQueryStr:@"正在发送冒泡"];
+    //无图片的冒泡，直接发送
+    if (tweet.tweetImages.count <= 0) {
+        sendTweetBlock();
+        return;
+    }
+    //判断图片是否全部上传完毕，是的话就发送该冒泡 block
+    BOOL (^whetherAllImagesUploadedAndSendTweetBlock)() = ^{
+        if (tweet.isAllImagesDoneSucess) {
+            sendTweetBlock();
+        }
+        return tweet.isAllImagesDoneSucess;
+    };
+    //图片均已上传，直接发送
+    if (whetherAllImagesUploadedAndSendTweetBlock()) {
+        return;
+    }
+    //遍历上传图片
+    for (TweetImage *imageItem in tweet.tweetImages) {
+        if (imageItem.imageStr.length > 0) {
+            whetherAllImagesUploadedAndSendTweetBlock();
+        }else{
+            if (imageItem.uploadState != TweetImageUploadStateIng) {
+                imageItem.uploadState = TweetImageUploadStateIng;
+                [self uploadTweetImage:imageItem.image doneBlock:^(NSString *imagePath, NSError *error) {
+                    imageItem.uploadState = imagePath? TweetImageUploadStateSuccess: TweetImageUploadStateFail;
+                    if (!imagePath) {
+                        [NSObject showStatusBarError:error];
+                        block(nil, error);
+                    }else{
+                        imageItem.imageStr = [NSString stringWithFormat:@"![](%@)", imagePath];
+                        whetherAllImagesUploadedAndSendTweetBlock();
+                    }
+                } progerssBlock:^(CGFloat progressValue) {
+                    DebugLog(@"progressValue %@ : %.2f", imageItem.assetURL.query, progressValue);
+                }];
+            }
+        }
     }
 }
 
@@ -1532,6 +1735,20 @@
             resultData = [resultData valueForKeyPath:@"list"];
             NSArray *resultA = [NSObject arrayFromJSON:resultData ofObjects:@"User"];
             block(resultA, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+}
+- (void)request_Tweet_LikesAndRewards_WithObj:(Tweet *)tweet andBlock:(void (^)(id data, NSError *error))block{
+    tweet.isLoading = YES;
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[tweet toLikesAndRewardsPath] withParams:[tweet toLikesAndRewardsParams] withMethodType:Get andBlock:^(id data, NSError *error) {
+        tweet.isLoading = NO;
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_Get label:@"冒泡_赞赏的人_列表"];
+            
+            id resultData = [data valueForKeyPath:@"data"];
+            block(resultData, nil);
         }else{
             block(nil, error);
         }
@@ -1730,6 +1947,37 @@
     }];
 }
 
+- (void)request_GeneratePhoneCodeToResetPhone:(NSString *)phone block:(void (^)(id data, NSError *error))block{
+    NSString *path = @"api/user/generate_phone_code";
+    NSDictionary *params = @{@"phone": phone};
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"生成手机验证码_绑定手机号"];
+        }
+        block(data, error);
+    }];
+}
+- (void)request_ResetPhone:(NSString *)phone code:(NSString *)code andBlock:(void (^)(id data, NSError *error))block{
+    NSString *path = @"api/user/updateInfo";
+    NSMutableDictionary *params = [[Login curLoginUser] toUpdateInfoParams].mutableCopy;
+    params[@"phone"] = phone;
+    params[@"code"] = code;
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"个人信息_修改手机号码"];
+            
+            id resultData = [data valueForKeyPath:@"data"];
+            User *user = [NSObject objectOfClass:@"User" fromJSON:resultData];
+            if (user) {
+                [Login doLogin:resultData];
+            }
+            block(user, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+}
+
 - (void)request_PointRecords:(PointRecords *)records andBlock:(void (^)(id data, NSError *error))block{
     [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[records toPath] withParams:[records toParams] withMethodType:Get andBlock:^(id data, NSError *error) {
         if (data) {
@@ -1744,6 +1992,19 @@
     }];
 }
 
+- (void)request_RewardToTweet:(NSString *)tweet_id encodedPassword:(NSString *)encodedPassword andBlock:(void (^)(id data, NSError *error))block{
+    NSString *path = [NSString stringWithFormat:@"api/tweet/%@/app_reward", tweet_id];
+    NSDictionary *params = encodedPassword.length > 0? @{@"encodedPassword": encodedPassword}: nil;
+    
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Post autoShowError:NO andBlock:^(id data, NSError *error) {
+        if (data) {
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"打赏成功"];
+        }else{
+            [MobClick event:kUmeng_Event_Request_ActionOfServer label:@"打赏失败"];
+        }
+        block(data, error);
+    }];
+}
 #pragma mark Message
 - (void)request_PrivateMessages:(PrivateMessages *)priMsgs andBlock:(void (^)(id data, NSError *error))block{
     priMsgs.isLoading = YES;
@@ -2011,11 +2272,16 @@
                     if (data) {
                         [MobClick event:kUmeng_Event_Request_Get label:@"项目_README"];
 
-                        id resultData = [[data valueForKey:@"data"] valueForKey:@"readme"];
-                        CodeFile_RealFile *realFile = [NSObject objectOfClass:@"CodeFile_RealFile" fromJSON:resultData];
-                        CodeFile *rCodeFile = [CodeFile codeFileWithRef:defultBranch andPath:realFile.path];
-                        rCodeFile.file = realFile;
-                        block(rCodeFile, nil);
+                        id resultData = data[@"data"][@"readme"];
+                        if (resultData) {
+                            CodeFile *rCodeFile = [NSObject objectOfClass:@"CodeFile" fromJSON:data[@"data"]];
+                            CodeFile_RealFile *realFile = [NSObject objectOfClass:@"CodeFile_RealFile" fromJSON:resultData];
+                            rCodeFile.path = realFile.path;
+                            rCodeFile.file = realFile;
+                            block(rCodeFile, nil);
+                        }else{
+                            block(@"我们推荐每个项目都新建一个README文件（客户端暂时不支持创建和编辑README）", nil);
+                        }
                     }else{
                         block(nil, error);
                     }
@@ -2288,8 +2554,32 @@
             block(nil, error);
         }
     }];
-
 }
+
+- (void)requestWithSearchString:(NSString *)strSearch typeStr:(NSString*)type andPage:(NSInteger)page andBlock:(void (^)(id data, NSError *error))block {
+    
+    NSString *path = [NSString stringWithFormat:@"/api/esearch/%@?q=%@&page=%d",type,strSearch, (int)page];
+    if ([type isEqualToString:@"all"]) {
+        path=[NSString stringWithFormat:@"%@&types=projects,project_topics,tasks,tweets,files,friends,merge_requests,pull_requests",path];
+    }else if ([type isEqualToString:@"public_project"]) {
+        path=[NSString stringWithFormat:@"/api/esearch/project?q=%@  related:false&page=%d",strSearch,(int)page];
+    }
+    
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:nil withMethodType:Get andBlock:^(id data, NSError *error) {
+        
+        if(data) {
+            [MobClick event:kUmeng_Event_Request_Get label:@"全局_搜索"];
+            
+//            id resultData = [(NSDictionary *)[data valueForKey:@"data"] objectForKey:@"tweets"];
+            id resultData = [data valueForKey:@"data"];
+            block(resultData, nil);
+        }else {
+            
+            block(nil, error);
+        }
+    }];
+}
+
 
 - (void)request_TopicDetailsWithTopicID:(NSInteger)topicID block:(void (^)(id data, NSError *error))block {
     NSString *path = [NSString stringWithFormat:@"/api/tweet_topic/%ld",(long)topicID];
@@ -2380,6 +2670,112 @@
         }else{
             block(nil, error);
         }
+    }];
+}
+
+#pragma mark-
+#pragma mark---------------------- shop ---------------------------
+
+
+- (void)request_shop_bannersWithBlock:(void (^)(id data, NSError *error))block{
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"/api/gifts/sliders" withParams:nil withMethodType:Get autoShowError:NO andBlock:^(id data, NSError *error) {
+        if (data) {
+            data = [data valueForKey:@"data"];
+            NSArray *resultA = [NSArray arrayFromJSON:data ofObjects:@"ShopBanner"];
+            
+            block(resultA, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+}
+
+- (void)request_shop_userPointWithShop:(Shop *)_shop andBlock:(void (^)(id data, NSError *error))block
+{
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/account/points" withParams:nil withMethodType:Get andBlock:^(id data, NSError *error) {
+        if (data) {
+             data = [data valueForKey:@"data"];
+            _shop.points_left = [data objectForKey:@"points_left"];
+            _shop.points_total = [data objectForKey:@"points_total"];
+            block(data, nil);
+        }else
+            block(nil, error);
+    }];
+}
+
+
+- (void)request_shop_giftsWithShop:(Shop *)_shop andBlock:(void (^)(id data, NSError *error))block
+{
+    NSDictionary *parsms = @{@"page":_shop.page , @"pageSize":_shop.pageSize};
+    _shop.isLoading = YES;
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[_shop toGiftsPath] withParams:parsms withMethodType:Get autoShowError:NO andBlock:^(id data, NSError *error) {
+        _shop.isLoading = NO;
+        if (data) {
+            data = [[data valueForKey:@"data"] valueForKey:@"list"];
+            NSArray *resultA = [NSArray arrayFromJSON:data ofObjects:@"ShopGoods"];
+            [_shop configWithGiftGoods:resultA];
+            
+            block(resultA, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+}
+
+- (void)request_shop_OrderListWithOrder:(ShopOrderModel *)_order andBlock:(void (^)(id data, NSError *error))block
+{
+    NSDictionary *parsms = @{@"page":_order.page , @"pageSize":_order.pageSize};
+    _order.isLoading = YES;
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:[_order toPath] withParams:parsms withMethodType:Get autoShowError:NO andBlock:^(id data, NSError *error) {
+        _order.isLoading = NO;
+        data = [data valueForKey:@"data"];
+        if (data) {
+            data = [data valueForKey:@"list"];
+            NSArray *resultA = [NSArray arrayFromJSON:data ofObjects:@"ShopOrder"];
+            [_order configOrderWithReson:resultA];
+            block(resultA, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+}
+
+- (void)request_shop_check_passwordWithpwd:(NSString *)pwd andBlock:(void (^)(id data, NSError *error))block
+{
+    if ([pwd isEmpty]) {
+        return;
+    }
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/account/check_password" withParams:@{@"password":[pwd sha1Str]} withMethodType:Post andBlock:^(id data, NSError *error) {
+        NSNumber *code = [data valueForKey:@"code"];
+        if (!error && code.intValue == 0) {
+            block(code, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+}
+///
+
+- (void)request_shop_exchangeWithParms:(NSDictionary *)parms andBlock:(void (^)(id data, NSError *error))block
+{
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:@"api/gifts/exchange" withParams:parms withMethodType:Post andBlock:^(id data, NSError *error) {
+        data = [data valueForKey:@"data"];
+        if (data) {
+            block(data, nil);
+        }else{
+            block(nil, error);
+        }
+    }];
+
+}
+
+- (void)request_LocationListWithParams:(NSDictionary *)params block:(void (^)(id data, NSError *error))block{
+    NSString *path  = @"api/region";
+    [[CodingNetAPIClient sharedJsonClient] requestJsonDataWithPath:path withParams:params withMethodType:Get andBlock:^(id data, NSError *error) {
+        if (data) {
+            data = data[@"data"];
+        }
+        block(data, error);
     }];
 }
 @end

@@ -25,11 +25,10 @@
 #import "TweetSendLocationDetailViewController.h"
 #import "CodingBannersView.h"
 
-#import "CSSearchVC.h"
-#import "CSSearchDisplayVC.h"
 #import "FunctionTipsManager.h"
+#import "CSHotTopicPagesVC.h"
 
-@interface Tweet_RootViewController () <UISearchBarDelegate, UISearchDisplayDelegate>
+@interface Tweet_RootViewController ()
 {
     CGFloat _oldPanOffsetY;
 }
@@ -49,9 +48,6 @@
 @property (strong, nonatomic) Tweet *deleteTweet;
 @property (nonatomic, assign) NSInteger deleteTweetsIndex;
 
-//搜索
-@property (nonatomic, strong) UISearchBar       *searchBar;
-@property (strong, nonatomic) CSSearchDisplayVC *searchDisplayVC;
 //Banner
 @property (strong, nonatomic) CodingBannersView *myBannersView;
 @end
@@ -103,7 +99,8 @@
 //                              [self refreshFirst];
 //                          }];
     
-    UIBarButtonItem *leftBarItem =[UIBarButtonItem itemWithIcon:@"search_Nav" showBadge:NO target:self action:@selector(searchItemClicked:)];
+    UIBarButtonItem *leftBarItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"hot_topic_Nav"] style:UIBarButtonItemStylePlain target:self action:@selector(hotTopicBtnClicked:)];
+
     [self.parentViewController.navigationItem setLeftBarButtonItem:leftBarItem animated:NO];
     
     _tweetsDict = [[NSMutableDictionary alloc] initWithCapacity:4];
@@ -287,48 +284,11 @@
     }];
 }
 
-#pragma mark - search 
+#pragma mark - nav_LeftBtn
 
-- (void)searchItemClicked:(id)sender{
-    if ([[FunctionTipsManager shareManager] needToTip:kFunctionTipStr_Search]) {
-        [[FunctionTipsManager shareManager] markTiped:kFunctionTipStr_Search];
-        UIButton *leftItemView = (UIButton *)self.parentViewController.navigationItem.leftBarButtonItem.customView;
-        [leftItemView removeBadgePoint];
-    }
-    
-    if(!_searchBar) {
-        
-        _searchBar = ({
-            
-            UISearchBar *searchBar = [[UISearchBar alloc] init];
-            searchBar.delegate = self;
-            [searchBar sizeToFit];
-            [searchBar setPlaceholder:@"搜索冒泡、用户名、话题"];
-            [searchBar setTintColor:[UIColor whiteColor]];
-            [searchBar setTranslucent:NO];
-            [searchBar insertBGColor:[UIColor colorWithHexString:@"0x28303b"]];
-            searchBar;
-        });
-        [self.parentViewController.navigationController.view addSubview:_searchBar];
-        [_searchBar setY:20];
-    }
-    
-    if (!_searchDisplayVC) {
-        _searchDisplayVC = ({
-            
-            CSSearchDisplayVC *searchVC = [[CSSearchDisplayVC alloc] initWithSearchBar:_searchBar contentsController:self.parentViewController];
-            searchVC.parentVC = self;
-//            searchVC.delegate = self;
-//            if (kHigher_iOS_6_1) {
-//                
-//                searchVC.displaysSearchBarInNavigationBar = NO;
-//            }
-            searchVC;
-        });
-    }
-
-    [self hideToolBar:YES];
-    [_searchBar becomeFirstResponder];
+- (void)hotTopicBtnClicked:(id)sender{
+    CSHotTopicPagesVC *vc = [CSHotTopicPagesVC new];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 #pragma mark Refresh M
@@ -600,38 +560,6 @@
 {
     _myTableView.delegate = nil;
     _myTableView.dataSource = nil;
-}
-
-#pragma mark -
-#pragma mark UISearchBarDelegate Support
-
-- (BOOL)searchBarShouldBeginEditing:(UISearchBar *)searchBar {
-
-    return YES;
-}
-
-- (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
-    
-}
-
-- (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
-    
-}
-
-- (void)searchBarCancelButtonClicked:(UISearchBar *)searchBar {
-
-    [self hideToolBar:NO];
-}
-
-#pragma mark -
-#pragma mark UISearchDisplayDelegate Support
-
-- (void)searchDisplayController:(UISearchDisplayController *)controller didHideSearchResultsTableView:(UITableView *)tableView {
-    
-}
-
-- (void)searchDisplayControllerDidBeginSearch:(UISearchDisplayController *)controller {
-    
 }
 
 @end

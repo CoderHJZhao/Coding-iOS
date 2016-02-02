@@ -11,6 +11,8 @@
 #import "WebContentManager.h"
 #import "ProjectCommitsViewController.h"
 #import "ProjectViewController.h"
+#import "CodeListViewController.h"
+#import "EditCodeViewController.h"
 
 @interface CodeViewController ()
 @property (strong, nonatomic) UIWebView *webContentView;
@@ -29,7 +31,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view.
-    self.title = [[_myCodeFile.path componentsSeparatedByString:@"/"] lastObject];
+    self.title = self.isReadMe? @"README": [[_myCodeFile.path componentsSeparatedByString:@"/"] lastObject];
     
     {
         //用webView显示内容
@@ -72,14 +74,13 @@
 - (void)sendRequest{
     [self.view beginLoading];
     __weak typeof(self) weakSelf = self;
-    if (_myCodeFile.ref.length <= 0 && [_myCodeFile.path isEqualToString:@"README"]) {
+    if (_isReadMe) {
         [[Coding_NetAPIManager sharedManager] request_ReadMeOFProject:_myProject andBlock:^(id data, NSError *error) {
             [weakSelf doSomethingWithResponse:data andError:error];
         }];
     }else{
         [[Coding_NetAPIManager sharedManager] request_CodeFile:_myCodeFile withPro:_myProject andBlock:^(id data, NSError *error) {
             [weakSelf doSomethingWithResponse:data andError:error];
-            [weakSelf configRightNavBtn];
         }];
     }
 }
@@ -96,16 +97,18 @@
     [self.view configBlankPage:EaseBlankPageTypeView hasData:(data != nil) hasError:(error != nil) reloadButtonBlock:^(id sender) {
         [self sendRequest];
     }];
+    [self configRightNavBtn];
 }
 
 - (void)refreshCodeViewData{
     if ([_myCodeFile.file.mode isEqualToString:@"image"]) {
-        NSURL *imageUrl = [NSURL URLWithString:[NSString stringWithFormat:@"%@u/%@/p/%@/git/raw/%@", [NSObject baseURLStr], _myProject.owner_user_name, _myProject.name, [NSString handelRef:_myCodeFile.ref path:_myCodeFile.file.path]]];
+//        NSURL *imageUrl = [NSURL URLWithString:[NSString stringWithFormat:@"%@u/%@/p/%@/git/raw/%@", [NSObject baseURLStr], _myProject.owner_user_name, _myProject.name, [NSString handelRef:_myCodeFile.ref path:_myCodeFile.file.path]]];
+        NSURL *imageUrl = [NSURL URLWithString:[NSString stringWithFormat:@"%@u/%@/p/%@/git/raw/%@/%@", [NSObject baseURLStr], _myProject.owner_user_name, _myProject.name, _myCodeFile.ref, _myCodeFile.file.path]];
         DebugLog(@"imageUrl: %@", imageUrl);
         [self.webContentView loadRequest:[NSURLRequest requestWithURL:imageUrl]];
     }else if ([_myCodeFile.file.mode isEqualToString:@"file"] ||
               [_myCodeFile.file.mode isEqualToString:@"sym_link"]){
-        NSString *contentStr = [WebContentManager codePatternedWithContent:_myCodeFile];
+        NSString *contentStr = [WebContentManager codePatternedWithContent:_myCodeFile isEdit:NO];
         [self.webContentView loadHTMLString:contentStr baseURL:nil];
     }
 }
@@ -113,6 +116,17 @@
 #pragma mark UIWebViewDelegate
 - (BOOL)webView:(UIWebView *)webView shouldStartLoadWithRequest:(NSURLRequest *)request navigationType:(UIWebViewNavigationType)navigationType{
     DebugLog(@"strLink=[%@]",request.URL.absoluteString);
+    if ([_myCodeFile.file.mode isEqualToString:@"image"]) {
+        NSString *imageStr = [NSString stringWithFormat:@"%@u/%@/p/%@/git/raw/%@/%@", [NSObject baseURLStr], _myProject.owner_user_name, _myProject.name, _myCodeFile.ref, _myCodeFile.file.path];
+        if ([imageStr isEqualToString:request.URL.absoluteString]) {
+            return YES;
+        }
+    }
+    UIViewController *vc = [BaseViewController analyseVCFromLinkStr:request.URL.absoluteString];
+    if (vc) {
+        [self.navigationController pushViewController:vc animated:YES];
+        return NO;
+    }
     return YES;
 }
 - (void)webViewDidStartLoad:(UIWebView *)webView{
@@ -132,39 +146,48 @@
 #pragma mark Nav
 - (void)configRightNavBtn{
     if (!self.navigationItem.rightBarButtonItem) {
-        [self.navigationItem setRightBarButtonItem:[[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"moreBtn_Nav"] style:UIBarButtonItemStylePlain target:self action:@selector(rightNavBtnClicked)] animated:NO];
+        if (_isReadMe) {
+            [self.navigationItem setRightBarButtonItem:[[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"tweetBtn_Nav"] style:UIBarButtonItemStylePlain target:self action:@selector(goToEditVC)] animated:NO];
+        }else{
+            [self.navigationItem setRightBarButtonItem:[[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"moreBtn_Nav"] style:UIBarButtonItemStylePlain target:self action:@selector(rightNavBtnClicked)] animated:NO];
+        }
     }
 }
 
 - (void)rightNavBtnClicked{
+    NSMutableArray *actionTitles = @[@"编辑代码", @"查看提交记录", @"退出代码查看"].mutableCopy;
+    if (!self.myCodeFile.can_edit) {
+        [actionTitles removeObjectAtIndex:0];
+    }
     __weak typeof(self) weakSelf = self;
-    [[UIActionSheet bk_actionSheetCustomWithTitle:nil buttonTitles:@[@"查看提交记录", @"退出代码查看"] destructiveTitle:nil cancelTitle:@"取消" andDidDismissBlock:^(UIActionSheet *sheet, NSInteger index) {
-        switch (index) {
-            case 0:{
-                [weakSelf goToCommitsVC];
-            }
-                break;
-            case 1:{
-                [weakSelf.navigationController.viewControllers enumerateObjectsWithOptions:NSEnumerationReverse usingBlock:^(UIViewController *obj, NSUInteger idx, BOOL *stop) {
-                    if (![obj isKindOfClass:[weakSelf class]]) {
-                        if ([obj isKindOfClass:[ProjectViewController class]]) {
-                            if ([(ProjectViewController *)obj curType] != ProjectViewTypeCodes) {
-                                *stop = YES;
-                            }
-                        }else{
-                            *stop = YES;
-                        }
-                    }
-                    if (*stop) {
-                        [weakSelf.navigationController popToViewController:obj animated:YES];
-                    }
-                }];
-            }
-                break;
-            default:
-                break;
-        }
+    [[UIActionSheet bk_actionSheetCustomWithTitle:nil buttonTitles:actionTitles destructiveTitle:nil cancelTitle:@"取消" andDidDismissBlock:^(UIActionSheet *sheet, NSInteger index) {
+        [weakSelf actionSheetClicked:sheet index:index];
     }] showInView:self.view];
+}
+
+- (void)actionSheetClicked:(UIActionSheet *)sheet index:(NSInteger)index{
+    if (!self.myCodeFile.can_edit) {
+        index++;
+    }
+    if (index == 0) {
+        [self goToEditVC];
+    }else if (index == 1){
+        [self goToCommitsVC];
+    }else if (index == 2){
+        [self popOut];
+    }
+}
+
+- (void)goToEditVC{
+    __weak typeof(self) weakSelf = self;
+
+    EditCodeViewController *vc = [EditCodeViewController new];
+    vc.myProject = _myProject;
+    vc.myCodeFile = _myCodeFile;
+    vc.savedSucessBlock = ^{
+        [weakSelf sendRequest];
+    };
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 - (void)goToCommitsVC{
@@ -172,6 +195,18 @@
     vc.curProject = self.myProject;
     vc.curCommits = [Commits commitsWithRef:self.myCodeFile.ref Path:self.myCodeFile.path];
     [self.navigationController pushViewController:vc animated:YES];
+}
+
+- (void)popOut{
+    __weak typeof(self) weakSelf = self;
+    [self.navigationController.viewControllers enumerateObjectsWithOptions:NSEnumerationReverse usingBlock:^(UIViewController *obj, NSUInteger idx, BOOL *stop) {
+        if (![obj isKindOfClass:[CodeViewController class]] &&
+            ![obj isKindOfClass:[CodeListViewController class]] &&
+            !([obj isKindOfClass:[ProjectViewController class]] && [(ProjectViewController *)obj curType] == ProjectViewTypeCodes)) {
+            *stop = YES;
+            [weakSelf.navigationController popToViewController:obj animated:YES];
+        }
+    }];
 }
 
 @end

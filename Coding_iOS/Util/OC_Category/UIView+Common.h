@@ -32,6 +32,16 @@ typedef NS_ENUM(NSInteger, EaseBlankPageType)
     EaseBlankPageTypeOthersJoinedTopic,
     EaseBlankPageTypeFileTypeCannotSupport,
     EaseBlankPageTypeViewTips,
+    EaseBlankPageTypeShopOrders,
+    EaseBlankPageTypeShopSendOrders,
+    EaseBlankPageTypeShopUnSendOrders,
+    EaseBlankPageTypeNoExchangeGoods,
+    EaseBlankPageTypeProject_ALL,
+    EaseBlankPageTypeProject_CREATE,
+    EaseBlankPageTypeProject_JOIN,
+    EaseBlankPageTypeProject_WATCHED,
+    EaseBlankPageTypeProject_STARED,
+    EaseBlankPageTypeProject_SEARCH,
 };
 
 typedef NS_ENUM(NSInteger, BadgePositionType) {
@@ -41,6 +51,11 @@ typedef NS_ENUM(NSInteger, BadgePositionType) {
 };
 
 @interface UIView (Common)
+@property (nonatomic) IBInspectable UIColor *borderColor;
+@property (nonatomic) IBInspectable CGFloat borderWidth;
+@property (nonatomic) IBInspectable CGFloat cornerRadius;
+@property (nonatomic) IBInspectable BOOL masksToBounds;
+
 - (void)doCircleFrame;
 - (void)doNotCircleFrame;
 - (void)doBorderWidth:(CGFloat)width color:(UIColor *)color cornerRadius:(CGFloat)cornerRadius;
@@ -103,7 +118,10 @@ typedef NS_ENUM(NSInteger, BadgePositionType) {
 @property (strong, nonatomic) UIImageView *monkeyView;
 @property (strong, nonatomic) UILabel *tipLabel;
 @property (strong, nonatomic) UIButton *reloadButton;
+@property (assign, nonatomic) EaseBlankPageType curType;
 @property (copy, nonatomic) void(^reloadButtonBlock)(id sender);
+@property (copy, nonatomic) void(^loadAndShowStatusBlock)();
+@property (copy, nonatomic) void(^clickButtonBlock)(EaseBlankPageType curType);
 - (void)configWithType:(EaseBlankPageType)blankPageType hasData:(BOOL)hasData hasError:(BOOL)hasError reloadButtonBlock:(void(^)(id sender))block;
 @end
 

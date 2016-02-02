@@ -29,6 +29,8 @@
 #import "CommitFilesViewController.h"
 #import "FileViewController.h"
 #import "CSTopicDetailVC.h"
+#import "CodeViewController.h"
+#import "Ease_2FA.h"
 
 #import "UnReadManager.h"
 
@@ -112,7 +114,7 @@ typedef NS_ENUM(NSInteger, AnalyseMethodType) {
         });
     }else if (applicationState == UIApplicationStateActive){
         NSString *param_url = [userInfo objectForKey:@"param_url"];
-        [self analyseVCFromLinkStr:param_url analyseMethod:AnalyseMethodTypeJustRefresh isNewVC:nil];
+        [self analyseVCFromLinkStr:param_url analyseMethod:AnalyseMethodTypeJustRefresh isNewVC:nil];//AnalyseMethodTypeJustRefresh
         //标记未读
         UIViewController *presentingVC = [BaseViewController presentingVC];
         if ([presentingVC isKindOfClass:[Message_RootViewController class]]) {
@@ -147,7 +149,7 @@ typedef NS_ENUM(NSInteger, AnalyseMethodType) {
     
     NSString *userRegexStr = @"/u/([^/]+)$";
     NSString *userTweetRegexStr = @"/u/([^/]+)/bubble$";
-    NSString *ppRegexStr = @"/u/([^/]+)/pp/([0-9]+)$";
+    NSString *ppRegexStr = @"/u/([^/]+)/pp/([0-9]+)";
     NSString *pp_projectRegexStr = @"/u/([^/]+)/p/([^\?]+)[\?]pp=([0-9]+)$";
     NSString *topicRegexStr = @"/u/([^/]+)/p/([^/]+)/topic/(\\d+)";
     NSString *taskRegexStr = @"/u/([^/]+)/p/([^/]+)/task/(\\d+)";
@@ -155,9 +157,10 @@ typedef NS_ENUM(NSInteger, AnalyseMethodType) {
     NSString *gitMRPRCommitRegexStr = @"/u/([^/]+)/p/([^/]+)/git/(merge|pull|commit)/([^/#]+)";
     NSString *conversionRegexStr = @"/user/messages/history/([^/]+)$";
     NSString *pp_topicRegexStr = @"/pp/topic/([0-9]+)$";
+    NSString *codeRegexStr = @"/u/([^/]+)/p/([^/]+)/git/blob/([^/]+)[/]?([^?]*)";
+    NSString *twoFARegexStr = @"/app_intercept/show_2fa";
     NSString *projectRegexStr = @"/u/([^/]+)/p/([^/]+)";
     NSArray *matchedCaptures = nil;
-    
     if ((matchedCaptures = [linkStr captureComponentsMatchedByRegex:ppRegexStr]).count > 0){
         //冒泡
         NSString *user_global_key = matchedCaptures[1];
@@ -310,6 +313,21 @@ typedef NS_ENUM(NSInteger, AnalyseMethodType) {
             CSTopicDetailVC *vc = [CSTopicDetailVC new];
             vc.topicID = pp_topic_id.integerValue;
             analyseVC = vc;
+        }else if ((matchedCaptures = [linkStr captureComponentsMatchedByRegex:codeRegexStr]).count > 0){
+            NSString *user_global_key = matchedCaptures[1];
+            NSString *project_name = matchedCaptures[2];
+            NSString *ref = matchedCaptures[3];
+            NSString *path = matchedCaptures.count >= 5? matchedCaptures[4]: @"";
+            
+            Project *curPro = [[Project alloc] init];
+            curPro.owner_user_name = user_global_key;
+            curPro.name = project_name;
+            CodeFile *codeFile = [CodeFile codeFileWithRef:ref andPath:path];
+            CodeViewController *vc = [CodeViewController codeVCWithProject:curPro andCodeFile:codeFile];
+            analyseVC = vc;
+        }else if ((matchedCaptures = [linkStr captureComponentsMatchedByRegex:twoFARegexStr]).count > 0){
+            //两步验证
+            analyseVC = [OTPListViewController new];
         }else if ((matchedCaptures = [linkStr captureComponentsMatchedByRegex:projectRegexStr]).count > 0){
             //项目
             NSString *user_global_key = matchedCaptures[1];
@@ -377,7 +395,9 @@ typedef NS_ENUM(NSInteger, AnalyseMethodType) {
         return;
     }
     UINavigationController *nav = [[BaseNavigationController alloc] initWithRootViewController:viewController];
-    viewController.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:viewController action:@selector(dismissModalViewControllerAnimated:)];
+    if (!viewController.navigationItem.leftBarButtonItem) {
+        viewController.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"关闭" style:UIBarButtonItemStylePlain target:viewController action:@selector(dismissModalViewControllerAnimated:)];
+    }
     [[self presentingVC] presentViewController:nav animated:YES completion:nil];
 }
 

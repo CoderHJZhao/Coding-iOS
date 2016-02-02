@@ -14,8 +14,9 @@
 @property (copy, nonatomic) IndexSelectedBlock selectBlock;
 @property (strong, nonatomic) NSString *titleStr;
 @property (strong, nonatomic) NSArray *dataList;
-@property (assign, nonatomic) NSInteger defaultIndex;
+@property (assign, nonatomic) NSInteger selectedIndex;
 @property (assign, nonatomic) ValueListType type;
+@property (strong, nonatomic) UIView *tipView;
 @end
 
 @implementation ValueListViewController
@@ -48,18 +49,22 @@
         }];
         tableView;
     });
+    if (self.type == ValueListTypeProjectMemberType) {
+        [self.navigationItem setRightBarButtonItem:[[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"info_Nav"] style:UIBarButtonItemStylePlain target:self action:@selector(showMemberTypeTip)] animated:NO];
+    }
 }
 
-- (void)didReceiveMemoryWarning
-{
-    [super didReceiveMemoryWarning];
-    // Dispose of any resources that can be recreated.
+- (void)viewWillDisappear:(BOOL)animated{
+    [super viewWillDisappear:animated];
+    if (_selectBlock) {
+        _selectBlock(self.selectedIndex);
+    }
 }
 
 - (void)setTitle:(NSString *)title valueList:(NSArray *)list defaultSelectIndex:(NSInteger)index type:(ValueListType)type selectBlock:(IndexSelectedBlock)selectBlock{
     self.titleStr = title;
     self.dataList = list;
-    self.defaultIndex = index;
+    self.selectedIndex = index;
     self.type = type;
     self.selectBlock = selectBlock;
 }
@@ -73,15 +78,16 @@
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath{
     ValueListCell *cell = [tableView dequeueReusableCellWithIdentifier:kCellIdentifier_ValueList forIndexPath:indexPath];
     NSInteger row = indexPath.row;
-    if (_type == ValueListTypeTaskPriority) {
+    if (_type == ValueListTypeTaskPriority || _type == ValueListTypeProjectMemberType) {
         row = self.dataList.count-1 -row;
     }
     switch (_type) {
         case ValueListTypeTaskStatus:
-            [cell setTitleStr:[_dataList objectAtIndex:row] imageStr:nil isSelected:(_defaultIndex == row)];
+        case ValueListTypeProjectMemberType:
+            [cell setTitleStr:[_dataList objectAtIndex:row] imageStr:nil isSelected:(_selectedIndex == row)];
             break;
         case ValueListTypeTaskPriority:
-            [cell setTitleStr:[_dataList objectAtIndex:row] imageStr:[NSString stringWithFormat:@"taskPriority%ld", (long)row] isSelected:(_defaultIndex == row)];
+            [cell setTitleStr:[_dataList objectAtIndex:row] imageStr:[NSString stringWithFormat:@"taskPriority%ld", (long)row] isSelected:(_selectedIndex == row)];
             break;
         default:
             break;
@@ -105,20 +111,88 @@
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath{
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    NSInteger index = indexPath.row;
-    if (_type == ValueListTypeTaskPriority) {
-        index = self.dataList.count-1 -index;
+    
+    NSInteger value = indexPath.row;
+    if (_type == ValueListTypeTaskPriority || _type == ValueListTypeProjectMemberType) {
+        value = self.dataList.count-1 -value;
     }
-    if (_selectBlock) {
-        _selectBlock(index);
+    self.selectedIndex = value;
+
+    if (_type == ValueListTypeTaskPriority || _type == ValueListTypeTaskStatus) {
+        [self.navigationController popViewControllerAnimated:YES];
+        if (_selectBlock) {
+            _selectBlock(self.selectedIndex);
+        }
+    }else{
+        [self.myTableView reloadData];
     }
-    [self.navigationController popViewControllerAnimated:YES];
 }
 
-- (void)dealloc
-{
-    _myTableView.delegate = nil;
-    _myTableView.dataSource = nil;
+#pragma mark - Tip
+- (void)showMemberTypeTip{
+    if (self.tipView) {
+        [self dismissTipView];
+        return;
+    }
+    
+    NSString *tipStr =
+    
+@"项目所有者：拥有对项目的所有权限。\n\
+项目管理员：拥有对项目的部分权限。不能删除，转让项目，不能对其他管理员进行操作。\n\
+普通成员：可以阅读和推送代码。\n\
+受限成员：不能进入与代码相关的页面。\n";
+    
+    self.tipView = [self showTipStr:tipStr];
+}
+- (UIView *)showTipStr:(NSString *)tipStr{
+    if (tipStr.length <= 0) {
+        return nil;
+    }
+    UIView *tipV = [[UIView alloc] initWithFrame:self.view.bounds];
+    tipV.backgroundColor = [UIColor colorWithWhite:0.2 alpha:0.9];
+    [tipV bk_whenTapped:^{
+        [self dismissTipView];
+    }];
+    UITextView *textV = [UITextView new];
+    textV.backgroundColor = [UIColor clearColor];
+    textV.editable = NO;
+
+    NSMutableParagraphStyle *paragraphStyle = [[NSMutableParagraphStyle alloc] init];
+    paragraphStyle.maximumLineHeight = 25;
+    paragraphStyle.minimumLineHeight = 25;
+    NSDictionary *attributes = @{
+                          NSFontAttributeName : [UIFont systemFontOfSize:15],
+                          NSForegroundColorAttributeName: [UIColor whiteColor],
+                          NSParagraphStyleAttributeName : paragraphStyle,
+                          };
+    textV.attributedText = [[NSAttributedString alloc] initWithString:tipStr attributes:attributes];
+
+    [RACObserve(textV, contentSize) subscribeNext:^(id x) {
+        CGFloat diffY = MAX(0, (textV.size.height - textV.contentSize.height)/3);
+        textV.contentInset = UIEdgeInsetsMake(diffY, 0, 0, 0);
+    }];
+    [tipV addSubview:textV];
+    [textV mas_makeConstraints:^(MASConstraintMaker *make) {
+        make.edges.equalTo(tipV).insets(UIEdgeInsetsMake(0, 7, 0, 7));
+    }];
+    tipV.alpha = 0.0;
+    
+    [self.view addSubview:tipV];
+    [UIView animateWithDuration:0.3 animations:^{
+        tipV.alpha = 1.0;
+        self.myTableView.scrollEnabled = NO;
+    }];
+    return tipV;
+}
+
+- (void)dismissTipView{
+    [UIView animateWithDuration:0.3 animations:^{
+        self.tipView.alpha = 0.0;
+    } completion:^(BOOL finished) {
+        [self.tipView removeFromSuperview];
+        self.tipView = nil;
+        self.myTableView.scrollEnabled = YES;
+    }];
 }
 
 @end

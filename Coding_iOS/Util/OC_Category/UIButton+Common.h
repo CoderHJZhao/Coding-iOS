@@ -24,6 +24,11 @@
 - (void)configPriMsgBtnWithUser:(User *)curUser fromCell:(BOOL)fromCell;
 + (UIButton *)btnPriMsgWithUser:(User *)curUser;
 
-+ (UIButton *)tweetBtnWithFrame:(CGRect)frame image:(NSString *)imageName;
++ (UIButton *)tweetBtnWithFrame:(CGRect)frame alignmentLeft:(BOOL)alignmentLeft;
 - (void)animateToImage:(NSString *)imageName;
+
+//开始请求时，UIActivityIndicatorView 提示
+- (void)startQueryAnimate;
+- (void)stopQueryAnimate;
+
 @end

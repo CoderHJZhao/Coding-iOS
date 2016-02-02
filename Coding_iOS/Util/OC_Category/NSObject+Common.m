@@ -7,8 +7,8 @@
 //
 #define kPath_ImageCache @"ImageCache"
 #define kPath_ResponseCache @"ResponseCache"
-
 #define kTestKey @"BaseURLIsTest"
+#define kHUDQueryViewTag 101
 
 #import "NSObject+Common.h"
 #import "JDStatusBarNotification.h"
@@ -64,6 +64,26 @@
         hud.removeFromSuperViewOnHide = YES;
         [hud hide:YES afterDelay:1.0];
     }
+}
++ (instancetype)showHUDQueryStr:(NSString *)titleStr{
+    titleStr = titleStr.length > 0? titleStr: @"正在获取数据...";
+    MBProgressHUD *hud = [MBProgressHUD showHUDAddedTo:kKeyWindow animated:YES];
+    hud.tag = kHUDQueryViewTag;
+    hud.labelText = titleStr;
+    hud.labelFont = [UIFont boldSystemFontOfSize:15.0];
+    hud.margin = 10.f;
+    return hud;
+}
++ (NSUInteger)hideHUDQuery{
+    __block NSUInteger count = 0;
+    NSArray *huds = [MBProgressHUD allHUDsForView:kKeyWindow];
+    [huds enumerateObjectsUsingBlock:^(UIView *obj, NSUInteger idx, BOOL *stop) {
+        if (obj.tag == kHUDQueryViewTag) {
+            [obj removeFromSuperview];
+            count++;
+        }
+    }];
+    return count;
 }
 + (void)showStatusBarQueryStr:(NSString *)tipStr{
     [JDStatusBarNotification showWithStatus:tipStr styleName:JDStatusBarStyleSuccess];
@@ -292,10 +312,13 @@
         error = [NSError errorWithDomain:[NSObject baseURLStr] code:resultCode.intValue userInfo:responseJSON];
 
         if (resultCode.intValue == 1000 || resultCode.intValue == 3207) {//用户未登录
-            if ([Login isLogin]) {//已登录的状态要抹掉
-                [Login doLogout];
-                [((AppDelegate *)[UIApplication sharedApplication].delegate) setupLoginViewController];
-                kTipAlert(@"%@", [NSObject tipFromError:error]);
+            if ([Login isLogin]) {
+                [Login doLogout];//已登录的状态要抹掉
+                //更新 UI 要延迟 >1.0 秒，否则屏幕可能会不响应触摸事件。。暂不知为何
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    [((AppDelegate *)[UIApplication sharedApplication].delegate) setupLoginViewController];
+                    kTipAlert(@"%@", [NSObject tipFromError:error]);
+                });
             }
         }else{
             if (autoShowError) {

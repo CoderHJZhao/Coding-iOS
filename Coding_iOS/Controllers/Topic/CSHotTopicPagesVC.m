@@ -11,13 +11,18 @@
 #import "CSHotTopicView.h"
 #import "CSMyTopicVC.h"
 #import "SMPageControl.h"
+#import "CSSearchVC.h"
+#import "CSSearchDisplayVC.h"
 
-@interface CSHotTopicPagesVC ()<UIScrollViewDelegate>
+@interface CSHotTopicPagesVC ()<UIScrollViewDelegate, UISearchBarDelegate, UISearchDisplayDelegate>
 @property (nonatomic,strong) UIScrollView *scrollView;
 @property (nonatomic,strong) SMPageControl *pageControl;
 @property (nonatomic,strong) UIView *navigationBarView;
 
 @property (nonatomic,strong)NSArray *navTitles;
+//搜索
+@property (nonatomic, strong) UISearchBar       *searchBar;
+@property (strong, nonatomic) CSSearchDisplayVC *searchDisplayVC;
 @end
 
 @implementation CSHotTopicPagesVC
@@ -26,7 +31,9 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     
-    
+    UIBarButtonItem *rightBarItem = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"search_Nav"] style:UIBarButtonItemStylePlain target:self action:@selector(searchItemClicked:)];
+    [self.navigationItem setRightBarButtonItem:rightBarItem animated:NO];
+
     [self setupUI];
 }
 
@@ -46,6 +53,46 @@
     [self.navigationBarView removeFromSuperview];
 }
 
+#pragma mark -
+- (void)searchItemClicked:(id)sender{
+    
+    if(!_searchBar) {
+        
+        _searchBar = ({
+            
+            UISearchBar *searchBar = [[UISearchBar alloc] init];
+            searchBar.delegate = self;
+            [searchBar sizeToFit];
+            [searchBar setPlaceholder:@"搜索冒泡、用户名、话题"];
+            [searchBar setTintColor:[UIColor whiteColor]];
+            [searchBar setTranslucent:NO];
+            [searchBar insertBGColor:[UIColor colorWithHexString:@"0x28303b"]];
+            searchBar;
+        });
+        [self.navigationController.view addSubview:_searchBar];
+        [_searchBar setY:20];
+    }
+    
+    if (!_searchDisplayVC) {
+        _searchDisplayVC = ({
+            CSSearchDisplayVC *searchVC = [[CSSearchDisplayVC alloc] initWithSearchBar:_searchBar contentsController:self];
+            searchVC.parentVC = self;
+            searchVC.delegate = self;
+            searchVC.displaysSearchBarInNavigationBar = NO;
+            searchVC;
+        });
+    }
+    
+    [_searchBar becomeFirstResponder];
+}
+
+#pragma mark -
+#pragma mark UISearchBarDelegate Support
+
+- (BOOL)searchBarShouldBeginEditing:(UISearchBar *)searchBar {
+    
+    return YES;
+}
 
 #pragma mark -
 
@@ -160,13 +207,13 @@
     UILabel *la1 = [[UILabel alloc] initWithFrame:CGRectMake((kScreen_Width/2 - titleWidth/2) + 0*distance, 8, titleWidth, 16)];
     la1.text = @"热门话题";
     la1.textAlignment = NSTextAlignmentCenter;
-    la1.font = [UIFont systemFontOfSize:16];
+    la1.font = [UIFont boldSystemFontOfSize:18];
     la1.textColor = [UIColor whiteColor];
     
     UILabel *la2 = [[UILabel alloc] initWithFrame:CGRectMake((kScreen_Width/2 - titleWidth/2) + 1*distance, 8, titleWidth, 16)];
     la2.text = @"我的话题";
     la2.textAlignment = NSTextAlignmentCenter;
-    la2.font = [UIFont systemFontOfSize:16];
+    la2.font = [UIFont boldSystemFontOfSize:18];
     la2.textColor = [UIColor whiteColor];
     
     

@@ -29,22 +29,32 @@ static User *curLoginUser;
     return self;
 }
 
-- (NSDictionary *)toParams{
-    if (self.j_captcha && self.j_captcha.length > 0) {
-        return @{@"email" : self.email,
-                 @"password" : [self.password sha1Str],
-                 @"remember_me" : self.remember_me? @"true" : @"false",
-                 @"j_captcha" : self.j_captcha};
+- (NSString *)toPath{
+    NSString *path;
+    if ([self.email isPhoneNo]) {
+        path = @"api/account/login/phone";
     }else{
-        return @{@"email" : self.email,
-                 @"password" : [self.password sha1Str],
-                 @"remember_me" : self.remember_me? @"true" : @"false"};
+        path = @"api/login";
     }
+    return path;
+}
+- (NSDictionary *)toParams{
+    NSMutableDictionary *params = @{@"password" : [self.password sha1Str],
+                                    @"remember_me" : self.remember_me? @"true" : @"false",}.mutableCopy;
+    if ([self.email isPhoneNo]) {
+        params[@"phone"] = self.email;
+    }else{
+        params[@"email"] = self.email;
+    }
+    if (self.j_captcha.length > 0) {
+        params[@"j_captcha"] = self.j_captcha;
+    }
+    return params;
 }
 
 - (NSString *)goToLoginTipWithCaptcha:(BOOL)needCaptcha{
     if (!_email || _email.length <= 0) {
-        return @"请填写电子邮箱或个性后缀";
+        return @"请填写「手机号码/电子邮箱/个性后缀」";
     }
     if (!_password || _password.length <= 0) {
         return @"请填写密码";
@@ -69,6 +79,13 @@ static User *curLoginUser;
 }
 
 + (void)doLogin:(NSDictionary *)loginData{
+    
+//    NSArray *cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookies];
+//    [cookies enumerateObjectsUsingBlock:^(NSHTTPCookie *  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+//        NSLog(@"cookies : %@", obj.description);
+//    }];
+    
+    
     if (loginData) {
         NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
         [defaults setObject:[NSNumber numberWithBool:YES] forKey:kLoginStatus];
@@ -96,12 +113,16 @@ static User *curLoginUser;
     if (loginData) {
         NSMutableDictionary *loginDataList = [self readLoginDataList];
         User *curUser = [NSObject objectOfClass:@"User" fromJSON:loginData];
-        if (curUser.global_key) {
+        if (curUser.global_key.length > 0) {
             [loginDataList setObject:loginData forKey:curUser.global_key];
             saved = YES;
         }
-        if (curUser.email) {
+        if (curUser.email.length > 0) {
             [loginDataList setObject:loginData forKey:curUser.email];
+            saved = YES;
+        }
+        if (curUser.phone.length > 0) {
+            [loginDataList setObject:loginData forKey:curUser.phone];
             saved = YES;
         }
         if (saved) {
@@ -117,12 +138,12 @@ static User *curLoginUser;
 }
 
 + (User *)userWithGlobaykeyOrEmail:(NSString *)textStr{
+    if (textStr.length <= 0) {
+        return nil;
+    }
     NSMutableDictionary *loginDataList = [self readLoginDataList];
     NSDictionary *loginData = [loginDataList objectForKey:textStr];
-    if (loginData) {
-        return [NSObject objectOfClass:@"User" fromJSON:loginData];
-    }
-    return nil;
+    return [NSObject objectOfClass:@"User" fromJSON:loginData];
 }
 
 + (void)setXGAccountWithCurUser{
@@ -142,9 +163,15 @@ static User *curLoginUser;
 + (void)doLogout{
     [UIApplication sharedApplication].applicationIconBadgeNumber = 0;
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    
     [defaults setObject:[NSNumber numberWithBool:NO] forKey:kLoginStatus];
     [defaults synchronize];
+    //删掉 coding 的 cookie
+    NSArray *cookies = [[NSHTTPCookieStorage sharedHTTPCookieStorage] cookies];
+    [cookies enumerateObjectsUsingBlock:^(NSHTTPCookie *  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        if ([obj.domain hasSuffix:@".coding.net"]) {
+            [[NSHTTPCookieStorage sharedHTTPCookieStorage] deleteCookie:obj];
+        }
+    }];
     [Login setXGAccountWithCurUser];
 }
 

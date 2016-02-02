@@ -18,6 +18,24 @@
 @implementation UIView (Common)
 static char LoadingViewKey, BlankPageViewKey;
 
+@dynamic borderColor,borderWidth,cornerRadius, masksToBounds;
+
+-(void)setBorderColor:(UIColor *)borderColor{
+    [self.layer setBorderColor:borderColor.CGColor];
+}
+
+-(void)setBorderWidth:(CGFloat)borderWidth{
+    [self.layer setBorderWidth:borderWidth];
+}
+
+-(void)setCornerRadius:(CGFloat)cornerRadius{
+    [self.layer setCornerRadius:cornerRadius];
+}
+
+- (void)setMasksToBounds:(BOOL)masksToBounds{
+    [self.layer setMasksToBounds:masksToBounds];
+}
+
 - (void)doCircleFrame{
     self.layer.masksToBounds = YES;
     self.layer.cornerRadius = self.frame.size.width/2;
@@ -492,18 +510,25 @@ static char LoadingViewKey, BlankPageViewKey;
 }
 
 - (void)configWithType:(EaseBlankPageType)blankPageType hasData:(BOOL)hasData hasError:(BOOL)hasError reloadButtonBlock:(void (^)(id))block{
-
+    
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (_loadAndShowStatusBlock) {
+            _loadAndShowStatusBlock();
+        }
+    });
+    
+    
     if (hasData) {
         [self removeFromSuperview];
         return;
     }
     self.alpha = 1.0;
-//    图片
+    //    图片
     if (!_monkeyView) {
         _monkeyView = [[UIImageView alloc] initWithFrame:CGRectZero];
         [self addSubview:_monkeyView];
     }
-//    文字
+    //    文字
     if (!_tipLabel) {
         _tipLabel = [[UILabel alloc] initWithFrame:CGRectZero];
         _tipLabel.backgroundColor = [UIColor clearColor];
@@ -514,7 +539,7 @@ static char LoadingViewKey, BlankPageViewKey;
         [self addSubview:_tipLabel];
     }
     
-//    布局
+    //    布局
     [_monkeyView mas_makeConstraints:^(MASConstraintMaker *make) {
         make.centerX.equalTo(self);
         make.bottom.equalTo(self.mas_centerY);
@@ -527,7 +552,7 @@ static char LoadingViewKey, BlankPageViewKey;
     
     _reloadButtonBlock = nil;
     if (hasError) {
-//        加载失败
+        //        加载失败
         if (!_reloadButton) {
             _reloadButton = [[UIButton alloc] initWithFrame:CGRectZero];
             [_reloadButton setImage:[UIImage imageNamed:@"blankpage_button_reload"] forState:UIControlStateNormal];
@@ -545,11 +570,13 @@ static char LoadingViewKey, BlankPageViewKey;
         [_monkeyView setImage:[UIImage imageNamed:@"blankpage_image_loadFail"]];
         _tipLabel.text = @"貌似出了点差错\n真忧伤呢";
     }else{
-//        空白数据
+        //        空白数据
         if (_reloadButton) {
             _reloadButton.hidden = YES;
         }
+        
         NSString *imageName, *tipStr;
+        _curType=blankPageType;
         switch (blankPageType) {
             case EaseBlankPageTypeActivity://项目动态
             {
@@ -631,9 +658,63 @@ static char LoadingViewKey, BlankPageViewKey;
                 tipStr = @"不支持这种类型的文件\n试试右上角的按钮，用其他应用打开吧";
             }
                 break;
-            case EaseBlankPageTypeViewTips:{
+            case EaseBlankPageTypeViewTips:
+            {
                 imageName = @"blankpage_image_Sleep";
                 tipStr = @"这里没有未读的消息";
+            }
+                break;
+            case EaseBlankPageTypeShopOrders:
+            {
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"您还木有订单呢\n努力推代码，把洋葱猴带回家～";
+            }
+                break;
+            case EaseBlankPageTypeShopSendOrders:
+            {
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"您还木有已发货的订单呢～";
+            }
+                break;
+            case EaseBlankPageTypeShopUnSendOrders:
+            {
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"您还木有未发货的订单呢～";
+            }
+                break;
+            case EaseBlankPageTypeNoExchangeGoods:{
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"还木有可兑换的商品呢\n努力推代码，把洋葱猴带回家～";
+            }
+                break;
+            case EaseBlankPageTypeProject_ALL:{
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"您还木有项目呢，赶快起来创建吧～";
+            }
+                break;
+            case EaseBlankPageTypeProject_CREATE:{
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"您还木有项目呢，赶快起来创建吧～";
+            }
+                break;
+            case EaseBlankPageTypeProject_JOIN:{
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"您还木有项目呢，赶快起来创建吧～";
+            }
+                break;
+            case EaseBlankPageTypeProject_WATCHED:{
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"您还木有项目呢，赶快起来创建吧～";
+            }
+                break;
+            case EaseBlankPageTypeProject_STARED:{
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"您还木有项目呢，赶快起来创建吧～";
+            }
+                break;
+            case EaseBlankPageTypeProject_SEARCH:{
+                imageName = @"blankpage_image_Sleep";
+                tipStr = @"什么都木有搜到，换个词再试试？";
             }
                 break;
             default://其它页面（这里没有提到的页面，都属于其它）
@@ -645,6 +726,60 @@ static char LoadingViewKey, BlankPageViewKey;
         }
         [_monkeyView setImage:[UIImage imageNamed:imageName]];
         _tipLabel.text = tipStr;
+        
+        if ((blankPageType>=EaseBlankPageTypeProject_ALL)&&(blankPageType<=EaseBlankPageTypeProject_STARED)) {
+            [_monkeyView mas_updateConstraints:^(MASConstraintMaker *make) {
+                make.centerX.equalTo(self);
+                make.bottom.equalTo(self.mas_centerY).offset(-35);
+            }];
+            
+            //新增按钮
+            UIButton *actionBtn=({
+                UIButton *button=[UIButton new];
+                button.backgroundColor=[UIColor colorWithHexString:@"0x3BBD79"];
+                button.titleLabel.font=[UIFont systemFontOfSize:15];
+                [button addTarget:self action:@selector(btnAction) forControlEvents:UIControlEventTouchUpInside];
+                button.layer.cornerRadius=18;
+                button.layer.masksToBounds=TRUE;
+                button;
+            });
+            [self addSubview:actionBtn];
+            
+            [actionBtn mas_makeConstraints:^(MASConstraintMaker *make) {
+                make.size.mas_equalTo(CGSizeMake(125 , 36));
+                make.top.equalTo(_tipLabel.mas_bottom).offset(15);
+                make.centerX.equalTo(self);
+            }];
+            
+            NSString *titleStr;
+            switch (blankPageType) {
+                case EaseBlankPageTypeProject_ALL:
+                case EaseBlankPageTypeProject_CREATE:
+                case EaseBlankPageTypeProject_JOIN:
+                    titleStr=@"+ 创建项目";
+                    //                    [actionBtn setTitle:@"+ 创建项目" forState:UIControlStateNormal];
+                    break;
+                case EaseBlankPageTypeProject_WATCHED:
+                    titleStr=@"+ 去关注";
+                    //                    [actionBtn setTitle:@"+ 去关注" forState:UIControlStateNormal];
+                    break;
+                case EaseBlankPageTypeProject_STARED:
+                    titleStr=@"+ 去收藏";
+                    //                    [actionBtn setTitle:@"+去收藏" forState:UIControlStateNormal];
+                    break;
+                default:
+                    break;
+            }
+            //            NSMutableAttributedString *titleFontStr=[[NSMutableAttributedString alloc] initWithString:[NSString stringWithFormat:@"+ %@",titleStr]];
+            //            NSRange range;
+            //            range.location=0;
+            //            range.length=1;
+            //            [titleFontStr addAttribute:NSFontAttributeName value:[UIFont systemFontOfSize:20] range:range];
+            //            [actionBtn setAttributedTitle:titleFontStr forState:UIControlStateNormal];
+            
+            [actionBtn setTitle:titleStr forState:UIControlStateNormal];
+            
+        }
     }
 }
 
@@ -658,14 +793,13 @@ static char LoadingViewKey, BlankPageViewKey;
     });
 }
 
+-(void)btnAction{
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.2 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (_clickButtonBlock) {
+            _clickButtonBlock(_curType);
+        }
+    });
+}
+
 @end
-
-
-
-
-
-
-
-
-
 

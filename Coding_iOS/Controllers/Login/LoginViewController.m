@@ -63,7 +63,8 @@
     _myTableView = ({
         TPKeyboardAvoidingTableView *tableView = [[TPKeyboardAvoidingTableView alloc] initWithFrame:self.view.bounds style:UITableViewStylePlain];
         [tableView registerClass:[Login2FATipCell class] forCellReuseIdentifier:kCellIdentifier_Login2FATipCell];
-        [tableView registerNib:[UINib nibWithNibName:kCellIdentifier_Input_OnlyText_Cell bundle:[NSBundle mainBundle]] forCellReuseIdentifier:kCellIdentifier_Input_OnlyText_Cell];
+        [tableView registerClass:[Input_OnlyText_Cell class] forCellReuseIdentifier:kCellIdentifier_Input_OnlyText_Cell_Text];
+        [tableView registerClass:[Input_OnlyText_Cell class] forCellReuseIdentifier:kCellIdentifier_Input_OnlyText_Cell_Captcha];
 
         tableView.backgroundView = self.bgBlurredView;
         tableView.dataSource = self;
@@ -76,12 +77,14 @@
         tableView;
     });
     
-    self.myTableView.contentInset = UIEdgeInsetsMake(-kHigher_iOS_6_1_DIS(20), 0, 0, 0);
     self.myTableView.tableHeaderView = [self customHeaderView];
     self.myTableView.tableFooterView=[self customFooterView];
     [self configBottomView];
     [self showdismissButton:self.showDismissButton];
     [self buttonFor2FA];
+    
+    [self refreshCaptchaNeeded];
+    [self refreshIconUserImage];
 }
 
 - (UIButton *)buttonFor2FA{
@@ -150,8 +153,6 @@
 - (void)viewWillAppear:(BOOL)animated{
     [super viewWillAppear:animated];
     [self.navigationController setNavigationBarHidden:YES animated:YES];
-    [self refreshCaptchaNeeded];
-    [self refreshIconUserImage];
 }
 
 - (void)viewDidAppear:(BOOL)animated{
@@ -175,6 +176,11 @@
             tipsView;
         });
     }
+}
+
+- (void)viewWillDisappear:(BOOL)animated{
+    [super viewWillDisappear:animated];
+    [self.view endEditing:YES];
 }
 
 - (void)showdismissButton:(BOOL)willShow{
@@ -207,39 +213,41 @@
         return cell;
     }
     
-    Input_OnlyText_Cell *cell = [tableView dequeueReusableCellWithIdentifier:kCellIdentifier_Input_OnlyText_Cell forIndexPath:indexPath];
+    Input_OnlyText_Cell *cell = [tableView dequeueReusableCellWithIdentifier:(indexPath.row > 1? kCellIdentifier_Input_OnlyText_Cell_Captcha: kCellIdentifier_Input_OnlyText_Cell_Text) forIndexPath:indexPath];
     cell.isForLoginVC = YES;
 
     __weak typeof(self) weakSelf = self;
     if (self.is2FAUI) {
         cell.textField.keyboardType = UIKeyboardTypeNumberPad;
-        [cell configWithPlaceholder:@" 动态验证码" andValue:self.otpCode];
+        [cell setPlaceholder:@" 动态验证码" value:self.otpCode];
         cell.textValueChangedBlock = ^(NSString *valueStr){
             weakSelf.otpCode = valueStr;
         };
     }else{
         if (indexPath.row == 0) {
             cell.textField.keyboardType = UIKeyboardTypeEmailAddress;
-            [cell configWithPlaceholder:@" 电子邮箱/个性后缀" andValue:self.myLogin.email];
+            [cell setPlaceholder:@" 手机号码/电子邮箱/个性后缀" value:self.myLogin.email];
             cell.textValueChangedBlock = ^(NSString *valueStr){
                 weakSelf.inputTipsView.valueStr = valueStr;
                 weakSelf.inputTipsView.active = YES;
                 weakSelf.myLogin.email = valueStr;
-                [weakSelf.iconUserView setImage:[UIImage imageNamed:@"icon_user_monkey"]];
+                [weakSelf refreshIconUserImage];
+            };
+            cell.editDidBeginBlock = ^(NSString *valueStr){
+                weakSelf.inputTipsView.valueStr = valueStr;
+                weakSelf.inputTipsView.active = YES;
             };
             cell.editDidEndBlock = ^(NSString *textStr){
                 weakSelf.inputTipsView.active = NO;
-                [weakSelf refreshIconUserImage];
             };
         }else if (indexPath.row == 1){
-            [cell configWithPlaceholder:@" 密码" andValue:self.myLogin.password];
+            [cell setPlaceholder:@" 密码" value:self.myLogin.password];
             cell.textField.secureTextEntry = YES;
             cell.textValueChangedBlock = ^(NSString *valueStr){
                 weakSelf.myLogin.password = valueStr;
             };
         }else{
-            cell.isCaptcha = YES;
-            [cell configWithPlaceholder:@" 验证码" andValue:self.myLogin.j_captcha];
+            [cell setPlaceholder:@" 验证码" value:self.myLogin.j_captcha];
             cell.textValueChangedBlock = ^(NSString *valueStr){
                 weakSelf.myLogin.j_captcha = valueStr;
             };
@@ -254,8 +262,10 @@
         User *curUser = [Login userWithGlobaykeyOrEmail:textStr];
         if (curUser && curUser.avatar) {
             [self.iconUserView sd_setImageWithURL:[curUser.avatar urlImageWithCodePathResizeToView:self.iconUserView] placeholderImage:[UIImage imageNamed:@"icon_user_monkey"]];
+            return;
         }
     }
+    [self.iconUserView setImage:[UIImage imageNamed:@"icon_user_monkey"]];
 }
 
 #pragma mark - Table view Header Footer
@@ -405,7 +415,7 @@
             }
         }];
     }else{
-        [[Coding_NetAPIManager sharedManager] request_Login_WithParams:[self.myLogin toParams] andBlock:^(id data, NSError *error) {
+        [[Coding_NetAPIManager sharedManager] request_Login_WithPath:[self.myLogin toPath] Params:[self.myLogin toParams] andBlock:^(id data, NSError *error) {
             weakSelf.loginBtn.enabled = YES;
             [weakSelf.activityIndicator stopAnimating];
             if (data) {
@@ -415,6 +425,12 @@
                 NSString *global_key = error.userInfo[@"msg"][@"two_factor_auth_code_not_empty"];
                 if (global_key.length > 0) {
                     [weakSelf changeUITo2FAWithGK:global_key];
+                }else if (error.userInfo[@"msg"][@"user_need_activate"]){
+                    [NSObject showError:error];
+                    Register *re = [Register new];
+                    re.phone = weakSelf.myLogin.email;
+                    RegisterViewController *vc = [RegisterViewController vcWithMethodType:RegisterMethodPhone stepIndex:2 registerObj:re];
+                    [self.navigationController pushViewController:vc animated:YES];
                 }else{
                     [NSObject showError:error];
                     [weakSelf refreshCaptchaNeeded];
@@ -425,7 +441,7 @@
 }
 
 - (IBAction)cannotLoginBtnClicked:(id)sender {
-    [[UIActionSheet bk_actionSheetCustomWithTitle:nil buttonTitles:@[@"找回密码", @"重发激活邮件"] destructiveTitle:nil cancelTitle:@"取消" andDidDismissBlock:^(UIActionSheet *sheet, NSInteger index) {
+    [[UIActionSheet bk_actionSheetCustomWithTitle:nil buttonTitles:@[@"忘记密码？", @"已注册，未设置密码？"] destructiveTitle:nil cancelTitle:@"取消" andDidDismissBlock:^(UIActionSheet *sheet, NSInteger index) {
         if (index <= 1) {
             [self goToCannotLoginWithIndex:index];
         }
@@ -433,14 +449,13 @@
 }
 
 - (void)goToCannotLoginWithIndex:(NSInteger)index{
-    CannotLoginViewController *vc = [[CannotLoginViewController alloc] init];
-    vc.type = index;
+    CannotLoginViewController *vc = [CannotLoginViewController vcWithPurposeType:(index == 0? PurposeToPasswordReset: PurposeToPasswordActivate) methodType:0 stepIndex:0 userStr:(([self.myLogin.email isPhoneNo] || [self.myLogin.email isEmail])? self.myLogin.email: nil)];
     [self.navigationController pushViewController:vc animated:YES];
 }
 
 
 - (IBAction)goRegisterVC:(id)sender {
-    RegisterViewController *vc = [[RegisterViewController alloc] init];    
+    RegisterViewController *vc = [RegisterViewController vcWithMethodType:RegisterMethodPhone stepIndex:0 registerObj:nil];
     [self.navigationController pushViewController:vc animated:YES];
 }
 

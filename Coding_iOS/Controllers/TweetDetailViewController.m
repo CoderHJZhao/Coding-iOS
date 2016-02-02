@@ -20,6 +20,7 @@
 #import "WebViewController.h"
 #import "ReportIllegalViewController.h"
 #import "TweetSendLocationDetailViewController.h"
+#import "CodingShareView.h"
 
 @interface TweetDetailViewController ()
 @property (nonatomic, strong) UITableView *myTableView;
@@ -51,7 +52,7 @@
     [super viewDidLoad];
     // Do any additional setup after loading the view.
     self.title = @"冒泡详情";
-    [self.navigationItem setRightBarButtonItem:[[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"moreBtn_Nav"] style:UIBarButtonItemStylePlain target:self action:@selector(rightNavBtnClicked)] animated:NO];
+    [self.navigationItem setRightBarButtonItem:[[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"share_Nav"] style:UIBarButtonItemStylePlain target:self action:@selector(rightNavBtnClicked)] animated:NO];
 
     //    添加myTableView
     _myTableView = ({
@@ -119,13 +120,20 @@
 - (void)rightNavBtnClicked{
     if (self.curTweet.id && [self.curTweet.id isKindOfClass:[NSNumber class]]) {
         [_myMsgInputView isAndResignFirstResponder];
-        @weakify(self);
-        [[UIActionSheet bk_actionSheetCustomWithTitle:nil buttonTitles:@[@"举报"] destructiveTitle:nil cancelTitle:@"取消" andDidDismissBlock:^(UIActionSheet *sheet, NSInteger index) {
-            if (index == 0) {
-                @strongify(self);
-                [self goToReport];
-            }
-        }] showInView:self.view];
+        
+//        if (_curTweet.project_id != nil) {
+//            [NSObject showHudTipStr:@"项目内冒泡，不能分享"];
+//            return;
+//        }
+        [CodingShareView showShareViewWithObj:_curTweet];
+
+//        @weakify(self);
+//        [[UIActionSheet bk_actionSheetCustomWithTitle:nil buttonTitles:@[@"举报"] destructiveTitle:nil cancelTitle:@"取消" andDidDismissBlock:^(UIActionSheet *sheet, NSInteger index) {
+//            if (index == 0) {
+//                @strongify(self);
+//                [self goToReport];
+//            }
+//        }] showInView:self.view];
     }
 }
 
